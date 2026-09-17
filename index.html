@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPA Dental — Calcolatore Costo Materiali</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Lato:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blu: #0D2839;
+    --oro: #CFAA5C;
+    --testo: #344054;
+    --testo-sec: #667085;
+    --bordo: #E4E7EC;
+    --bg: #FFFFFF;
+    --bg-sub: #F8F9FA;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--testo);
+    font-family: 'Lato', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 40px 24px 64px; }
+  header { text-align: center; margin-bottom: 32px; }
+  .eyebrow {
+    font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    font-size: 12px; color: var(--oro); margin-bottom: 10px;
+  }
+  h1 {
+    font-family: 'Playfair Display', serif; font-weight: 700; color: var(--blu);
+    font-size: 28px; margin: 0 0 10px; line-height: 1.25;
+  }
+  .sub { color: var(--testo-sec); font-size: 15px; line-height: 1.55; max-width: 480px; margin: 0 auto; }
+  .card { border: 1px solid var(--bordo); border-radius: 12px; padding: 28px; background: var(--bg); }
+  label {
+    display: block; font-weight: 700; font-size: 13px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--blu); margin-bottom: 8px;
+  }
+  .field { margin-bottom: 20px; }
+  select, textarea {
+    width: 100%; font-family: 'Lato', sans-serif; font-size: 15px; color: var(--testo);
+    background: var(--bg); border: 1px solid var(--bordo); border-radius: 8px; padding: 11px 14px;
+  }
+  select:focus, textarea:focus { outline: none; border-color: var(--oro); }
+  textarea { resize: vertical; min-height: 64px; }
+  .hint { font-size: 12.5px; color: var(--testo-sec); margin-top: 6px; }
+  button.primary {
+    width: 100%; background: var(--blu); color: #FFFFFF; border: none; border-radius: 8px;
+    padding: 14px 18px; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+  button.primary:hover { opacity: 0.92; }
+  button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+  .status { text-align: center; color: var(--testo-sec); font-size: 14px; margin-top: 16px; min-height: 20px; }
+  .result { margin-top: 24px; border-top: 1px solid var(--bordo); padding-top: 24px; display: none; }
+  .result.show { display: block; }
+  .suggested-box {
+    background: var(--bg-sub); border: 1px solid var(--oro); border-radius: 10px;
+    padding: 20px; text-align: center; margin-bottom: 18px;
+  }
+  .suggested-label {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--testo-sec); font-weight: 700; margin-bottom: 6px;
+  }
+  .suggested-value { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 34px; color: var(--blu); }
+  .suggested-range { font-size: 13.5px; color: var(--testo-sec); margin-top: 4px; }
+  .copy-btn {
+    margin-top: 12px; background: transparent; border: 1px solid var(--blu); color: var(--blu);
+    border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .breakdown h3 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blu); margin: 0 0 10px;
+  }
+  .breakdown ul { margin: 0 0 18px; padding-left: 18px; font-size: 14px; line-height: 1.6; }
+  .breakdown li { margin-bottom: 4px; }
+  .disclaimer {
+    font-size: 12.5px; color: var(--testo-sec); background: var(--bg-sub);
+    border-radius: 8px; padding: 12px 14px; line-height: 1.5;
+  }
+  .error-box {
+    background: #FDECEC; border: 1px solid #E9A0A0; color: #7A1F1F;
+    border-radius: 8px; padding: 12px 14px; font-size: 14px; margin-top: 16px;
+  }
+  footer { text-align: center; margin-top: 28px; font-size: 12px; color: var(--testo-sec); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">EPA Dental</div>
+    <h1>Calcolatore Costo Materiali</h1>
+    <p class="sub">Seleziona la prestazione per ottenere una stima rapida del costo materiali da inserire nel campo override del tuo file Marginalità.</p>
+  </header>
+
+  <div class="card">
+    <div class="field">
+      <label for="prestazione">Prestazione</label>
+      <select id="prestazione"></select>
+    </div>
+
+    <div class="field">
+      <label for="note">Note aggiuntive <span style="text-transform:none;font-weight:400;color:var(--testo-sec);">(opzionale)</span></label>
+      <textarea id="note" placeholder="Es. materiale premium vs standard, marca specifica, arcata completa, numero elementi..."></textarea>
+      <div class="hint">Più dettagli inserisci, più la stima sarà pertinente al tuo caso.</div>
+    </div>
+
+    <button class="primary" id="calcBtn">Calcola range costo materiali</button>
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result">
+      <div class="suggested-box">
+        <div class="suggested-label">Valore suggerito per il file Marginalità (colonna override €)</div>
+        <div class="suggested-value" id="suggestedValue">—</div>
+        <div class="suggested-range" id="rangeText"></div>
+        <button class="copy-btn" id="copyBtn">Copia valore</button>
+      </div>
+
+      <div class="breakdown">
+        <h3>Materiali principali coinvolti</h3>
+        <ul id="materialsList"></ul>
+      </div>
+
+      <div class="disclaimer" id="disclaimerText"></div>
+    </div>
+  </div>
+
+  <footer>Strumento di supporto interno — Studio clienti EPA Dental</footer>
+</div>
+
+<script>
+const PROCEDURE = ["1° E 2° PROVVISORIO", "AGGIUNTA DENTE-GANCIO", "ALL-ON-IMPLANT IN COMPOSITO SENZA PROVVISORIO", "ALL-ON-IMPLANT PROVVISORIO", "ALL-ON-IMPLANT ZIRCONIO", "ALLINEATORI COMPREHENSIVE", "ALLINEATORI COMPREHENSIVE POST FIRST", "ALLINEATORI EXPRESS", "ALLINEATORI FIRST", "ALLINEATORI LIGHT", "ALLUNGAMENTO CORONA (AC)", "APICECTOMIA", "APPARECCHIO FISSO", "APPARECCHIO FISSO ATT.CERAMICA", "APPARECCHIO FISSO ATT.METALLICI 1", "APPARECCHIO FISSO CERAMICA", "APPARECCHIO FISSO METALLICO 2", "APPARECCHIO MINIVITI PALATALI", "ATTIVATORE/ APPARECCHIO REMOVIBILE", "BIOPSIE", "CARTELLA PARODONTALE", "CARTELLA PARODONTALE FOLLOW UP", "CEMENTAZIONE CORONA", "CHIRURGIA ORALE", "CLINCHECK", "COMPOSITO PREPROTESICO (CP)", "CONTENZIONE ALLINEATORI", "CONTENZIONE CON 2 APP. X 6 MESI + RETINER", "CORONA A GIACCA/ONLAY", "CORONA ESTETICA DENTE", "CORONA ESTETICA IMPIANTO", "CORONA MONOLITICA DENTE", "CORONA MONOLITICA IMPIANTO", "DEBONDING ALLINEATORI", "ENDODONZIA BIRADICOLARE", "ENDODONZIA DENTE DECIDUO", "ENDODONZIA MONORADICOLATO", "ENDODONZIA PLURIRADICOLATO", "ESPANSORE (Cura di 5 mesi)", "ESTRAZIONE (EX)", "ESTRAZIONE 8°SUP/INF o COMPLICATA", "ESTRAZIONE CH.COMPLESSA", "ESTRAZIONE CHIRURGICA (EX CH)", "ESTRAZIONE DENTE DECIDUO", "ESTRAZIONE IMPIANTO", "ESTRAZIONE RICOSTRUZ.ALVEOLARE", "FACCETTA IN CERAMICA", "FACCETTA IN RESINA", "FIX ALL-ON IMPLANT", "FIX OVER DENTURE", "FIXTURE", "GENGIVECTOMIA A DENTE", "GRANDE RIALZO SENO MASCELLARE", "IGIENE", "IGIENE A.", "IGIENE BV", "IGIENE PEDODONTICA", "IGIENE POST DEBONDING", "IGIENE SENIOR", "IGIENE X 2", "IMPIANTO ORTODONTICO", "INNESTO EPITELIO/CONNETTIVO MULTIPLO", "INNESTO EPITELIO/CONNETTIVO SINGOLO", "INTARSIO", "LEMBO ACCESSO", "LEMBO SPOSTATO MULTIPLO", "LEMBO SPOSTATO SINGOLO", "LEVIGATURA DENTE SINGOLO", "MARYLAND BRIDGE", "MARYLAND BRIDGE PROVVISORIO", "MASCHERA DI DELAIRE", "MOCK UP", "NIGHT GUARD", "OR SU IMPIANTI", "OSTEO-RESETTIVA (OR)", "OTT 2° CLASSE", "OTT. M.O.D.", "OTT.1°- V° CLASSE", "OTT.DENTE DECIDUO", "OTT.ESTETICA GRUPPO FRONTALE E RIATTACCO", "OVER DENTURE INFERIORE SU 2 IMPIANTI", "PLACCA ORTODONTICA", "PLACCA PER PATOLOGIA ATM (terapia 5 mesi)", "PROTESI PARZIALE PROVVISORIA", "PROTESI SCHELETRATA", "PROTESI TOTALE", "PROTESI TOTALE PROVVISORIA", "PROVVISORIO LUNGA DURATA", "PROVVISORIO ORTODONTICO (a elemento)", "PROVVISORIO PRELIMATURA", "PROVVISORIO SU IMPIANTI O ARMATO", "RETINER POST-TRATTAMENTO ORTD.PER ARCATA", "RIBASATURA", "RICOSTRUZIONE OSSEA GUIDATA", "RICOSTRUZIONE OSSEA SESTANTE", "RICOSTRUZIONE OSSEA SITO SINGOLO", "RIFACIMENTO ALL-ON-4 IN COMPOSITO", "RIGENERAZIONE TISSUTALE GUIDATA", "RIPARAZIONE PROTESI", "SALDATURA LASER", "SBIANCAMENTO DENTE SINGOLO INTERNO", "SBIANCAMENTO PROFESSIONALE", "SCALING E ROOT-PLANNING (SC-RP) QUADRANTE", "SCOPERTURA DENTE INCLUSO", "SIGILLATURA SOLCHI A DENTE", "SONDAGGIO PARODONTALE", "SPLINTAGGIO A DENTE", "SPLINTAGGIO DENTI", "TERAPIA PARODONTALE", "TERAPIA PARODONTALE STRUMENTALE", "TRATTAMENTO FIXTURES"];
+
+const sel = document.getElementById('prestazione');
+PROCEDURE.forEach(p => {
+  const opt = document.createElement('option');
+  opt.value = p;
+  opt.textContent = p;
+  sel.appendChild(opt);
+});
+
+const btn = document.getElementById('calcBtn');
+const statusEl = document.getElementById('status');
+const resultEl = document.getElementById('result');
+const suggestedValueEl = document.getElementById('suggestedValue');
+const rangeTextEl = document.getElementById('rangeText');
+const materialsListEl = document.getElementById('materialsList');
+const disclaimerEl = document.getElementById('disclaimerText');
+const copyBtn = document.getElementById('copyBtn');
+
+let currentSuggested = null;
+
+function renderResult(data) {
+  const min = Number(data.min_eur);
+  const max = Number(data.max_eur);
+  const suggested = Number(data.suggested_eur);
+  currentSuggested = suggested;
+
+  suggestedValueEl.textContent = isFinite(suggested) ? ('€ ' + suggested.toFixed(2)) : '—';
+  rangeTextEl.textContent = (isFinite(min) && isFinite(max))
+    ? ('Range stimato: € ' + min.toFixed(2) + ' – € ' + max.toFixed(2))
+    : '';
+
+  materialsListEl.innerHTML = '';
+  (data.materials || []).forEach(m => {
+    const li = document.createElement('li');
+    li.textContent = m;
+    materialsListEl.appendChild(li);
+  });
+
+  disclaimerEl.textContent = "Stima indicativa generata da AI sulla base di conoscenza generale del mercato dei materiali odontoiatrici in Italia. Non sostituisce il costo reale da fattura: dove disponibile, usa sempre il dato reale nel file Marginalità.";
+
+  resultEl.classList.add('show');
+}
+
+btn.addEventListener('click', async () => {
+  const prestazione = sel.value;
+  const note = document.getElementById('note').value.trim();
+
+  btn.disabled = true;
+  resultEl.classList.remove('show');
+  const oldErr = document.querySelector('.error-box');
+  if (oldErr) oldErr.remove();
+  statusEl.textContent = "Sto calcolando la stima...";
+
+  try {
+    const resp = await fetch('/.netlify/functions/materiali', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prestazione, note })
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.error || 'Errore sconosciuto');
+    }
+
+    statusEl.textContent = "";
+    renderResult(data);
+  } catch (e) {
+    statusEl.textContent = "";
+    const box = document.createElement('div');
+    box.className = 'error-box';
+    box.textContent = "Non è stato possibile calcolare la stima. Riprova tra poco.";
+    resultEl.parentNode.insertBefore(box, resultEl.nextSibling);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+copyBtn.addEventListener('click', () => {
+  if (currentSuggested == null) return;
+  const text = currentSuggested.toFixed(2);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.textContent = "Copiato!";
+      setTimeout(() => { copyBtn.textContent = "Copia valore"; }, 1500);
+    }).catch(() => {
+      copyBtn.textContent = "Seleziona e copia: " + text;
+    });
+  } else {
+    copyBtn.textContent = "Valore: " + text;
+  }
+});
+</script>
+</body>
+</html>
