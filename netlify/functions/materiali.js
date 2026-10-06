@@ -1,83 +1,19 @@
-// Funzione serverless: gira sul server di Netlify, mai nel browser del visitatore.
-// La chiave API resta segreta qui dentro (variabile d'ambiente ANTHROPIC_API_KEY).
-
-exports.handler = async function (event) {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: JSON.stringify({ error: "Metodo non consentito" }) };
-  }
-
-  let body;
-  try {
-    body = JSON.parse(event.body || "{}");
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Richiesta non valida" }) };
-  }
-
-  const prestazione = (body.prestazione || "").toString().trim();
-  const note = (body.note || "").toString().trim();
-
-  if (!prestazione) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Prestazione mancante" }) };
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Chiave API non configurata sul server (ANTHROPIC_API_KEY mancante)" }),
-    };
-  }
-
-  const prompt = `Sei un esperto di costi dei materiali odontoiatrici in Italia (listini fornitori, cataloghi dentali, prassi di studio).
-Prestazione odontoiatrica: "${prestazione}"
-${note ? "Note aggiuntive fornite dal dentista: " + note : "Nessuna nota aggiuntiva fornita: usa un caso standard/medio per questa prestazione."}
-
-Stima il costo dei SOLI materiali/consumabili chair-side necessari per eseguire questa prestazione in uno studio dentistico italiano (escludi tempo poltrona, onorario, quota laboratorio odontotecnico esterno se non pertinente ai materiali).
-
-Rispondi SOLO con un oggetto JSON con questa struttura esatta, senza testo prima o dopo, senza blocchi di codice markdown:
-{"min_eur": numero, "max_eur": numero, "suggested_eur": numero, "materials": ["stringa breve", "..."]}`;
-
-  try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return { statusCode: 502, body: JSON.stringify({ error: "Errore dal servizio AI", detail: errText }) };
-    }
-
-    const data = await resp.json();
-    const rawText = (data.content && data.content[0] && data.content[0].text) || "";
-
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch (e) {
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsed = JSON.parse(match[0]);
-      } else {
-        throw new Error("Risposta AI non interpretabile");
-      }
-    }
-
-    return {
-      statusCode: 200,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(parsed),
-    };
-  } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: e.message || "Errore imprevisto" }) };
-  }
-};
+const MASTERDENT={zr_strat:210,zr_pitt:170,digital:150,total:355,scheletrata:435,provvisorio:32,ribasatura:110,riparazione:33};
+const EURODENTAL={guide:{1:180,2:210,3:240,4:270,5:300},planning:199};
+const B={'Otturazione semplice':[12,22,16,0,0,0],'Otturazione MOD':[18,32,24,0,0,0],'Ricostruzione estetica anteriore':[20,38,28,0,0,0],'Endodonzia monoradicolato':[18,35,25,0,0,0],'Endodonzia biradicolare':[24,45,33,0,0,0],'Endodonzia pluriradicolato':[30,60,42,0,0,0],'Igiene professionale':[5,12,8,0,0,0],'Scaling e root planing quadrante':[8,18,12,0,0,0],'Chirurgia parodontale':[25,55,38,0,0,0],'Estrazione semplice':[8,18,12,0,0,0],'Estrazione chirurgica/complessa':[18,45,30,0,0,0],'Rigenerazione ossea guidata':[90,260,160,0,0,0],'Grande rialzo seno mascellare':[150,350,230,0,0,0],'Apparecchio fisso':[40,100,65,0,0,0],'Allineatori Express/Light':[15,35,22,350,900,600],'Allineatori Comprehensive':[20,45,30,900,1800,1300],'Contenzione / retainer':[8,20,12,60,180,100]};
+function range(v,p=.12){return {min:+(v*(1-p)).toFixed(2),max:+(v*(1+p)).toFixed(2),suggested:+v.toFixed(2)}}
+exports.handler=async event=>{if(event.httpMethod!=='POST')return{statusCode:405,body:JSON.stringify({error:'Metodo non consentito'})};let x={};try{x=JSON.parse(event.body||'{}')}catch{return{statusCode:400,body:JSON.stringify({error:'Richiesta non valida'})}}const p=x.prestazione||'';let m={min:0,max:0,suggested:0},e={min:0,max:0,suggested:0},source='Benchmark EPA Dental iniziale',note='Stima di categoria per il pilot. Non include tempo poltrona né costi fissi.';
+if(B[p]){const a=B[p];m={min:a[0],max:a[1],suggested:a[2]};e={min:a[3],max:a[4],suggested:a[5]}}
+if(p==='Intarsio / Onlay'){m=x.variant==='chairside'?{min:35,max:75,suggested:50}:{min:15,max:35,suggested:24};e=x.variant==='chairside'?range(0,0):{min:130,max:240,suggested:180};note=x.variant==='chairside'?'Chairside: materiali di produzione/cementazione; nessun costo laboratorio.':'Workflow con laboratorio: consumabili chairside + costo odontotecnico.'}
+if(p==='Corona su dente'||p==='Corona su impianto'){const c=MASTERDENT[x.variant]||MASTERDENT.zr_pitt;m=p==='Corona su impianto'?{min:18,max:45,suggested:30}:{min:12,max:30,suggested:20};e=range(c,.08);source='Dato reale Gallonati · listino Masterdent';note='Costo laboratorio da listino Masterdent; materiali chairside ancora a benchmark.'}
+if(p==='Protesi totale'){m={min:25,max:60,suggested:40};e=range(MASTERDENT.total,.08);source='Dato reale Gallonati · listino Masterdent'}
+if(p==='Protesi scheletrata'){m={min:20,max:50,suggested:35};e=range(MASTERDENT.scheletrata,.08);source='Dato reale Gallonati · listino Masterdent'}
+if(p==='Provvisorio in resina'){m={min:8,max:20,suggested:12};e=range(MASTERDENT.provvisorio,.08);source='Dato reale Gallonati · listino Masterdent'}
+if(p==='Ribasatura'){m={min:5,max:15,suggested:8};e=range(MASTERDENT.ribasatura,.08);source='Dato reale Gallonati · listino Masterdent'}
+if(p==='Riparazione / aggiunta dente o gancio'){m={min:3,max:10,suggested:6};e=range(MASTERDENT.riparazione,.08);source='Dato reale Gallonati · listino Masterdent'}
+if(p==='Chirurgia implantare guidata'){const n=x.variant||'1';m={min:35,max:90,suggested:55};const v=EURODENTAL.guide[n]+EURODENTAL.planning;e=range(v,.03);source='Dato reale Gallonati · listino Eurodental';note='Dima + programmazione implantare. Costo esterno base €'+v+'. Fixture e altri materiali implantari non inclusi.'}
+if(p==='Impianto singolo'){const f=Number(x.fixture)||0;m=f?range(f+45,.1):{min:120,max:260,suggested:180};e={min:0,max:0,suggested:0};source=f?'Dato reale studio + benchmark consumabili':'Benchmark EPA Dental iniziale';note=f?'Materiali: fixture indicata + quota consumabili/componenti chirurgici.':'Fixture non indicata: benchmark iniziale da validare con Gallonati.'}
+if(p==='All-on-implant provvisorio'){m={min:180,max:420,suggested:280};e={min:300,max:900,suggested:550}}
+if(p==='All-on-implant definitivo'){m={min:200,max:500,suggested:320};e={min:900,max:2200,suggested:1500}}
+if(x.real_materials!==''&&x.real_materials!=null){m=range(Number(x.real_materials),0);source='Dato reale inserito dallo studio'}if(x.real_external!==''&&x.real_external!=null){e=range(Number(x.real_external),0);source='Dato reale inserito dallo studio'}
+return{statusCode:200,headers:{'content-type':'application/json'},body:JSON.stringify({materials:m,external:e,source,note})}}
