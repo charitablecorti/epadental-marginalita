@@ -38,8 +38,8 @@ exports.handler=async event=>{
  const ai=await estimateAI(input,archive);
  if(ai&&(valid(ai.materials)||valid(ai.external))){
    const materials=valid(ai.materials)?ai.materials:null,external=valid(ai.external)?ai.external:null;
-   if(!materials||!external)return respond(422,{error:'Non è stato possibile stimare entrambi i costi con sufficiente attendibilità. Aggiungi dettagli su materiali e laboratorio.'});
-   return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'consultato':'non collegato')+'.'});
+   if(materials&&external)return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'consultato':'non collegato')+'.'});
+   // Risposta AI parziale: usa il fallback invece di bloccare il calcolo.
  }
  // Continuità del calcolo: se AI non risponde, fornire stime orientative NON validate.
  // I range sono ipotesi per categoria, NON prezzi di fatture o benchmark di mercato.
