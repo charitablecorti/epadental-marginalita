@@ -1,16 +1,47 @@
-const MASTERDENT={zr_strat:210,zr_pitt:170,digital:150,total:355,scheletrata:435,provvisorio:32,ribasatura:110,riparazione:33};
-const EURODENTAL={guide:{1:180,2:210,3:240,4:270,5:300},planning:199};
-const EXT={'Otturazione semplice':[12,22,16,0,0,0],'Otturazione MOD':[18,32,24,0,0,0],'Ricostruzione estetica anteriore':[20,38,28,0,0,0],'Endodonzia monoradicolato':[18,35,25,0,0,0],'Endodonzia biradicolare':[24,45,33,0,0,0],'Endodonzia pluriradicolato':[30,60,42,0,0,0],'Igiene professionale':[5,12,8,0,0,0],'Scaling e root planing quadrante':[8,18,12,0,0,0],'Chirurgia parodontale':[25,55,38,0,0,0],'Estrazione semplice':[8,18,12,0,0,0],'Estrazione chirurgica/complessa':[18,45,30,0,0,0],'Rigenerazione ossea guidata':[90,260,160,0,0,0],'Grande rialzo seno mascellare':[150,350,230,0,0,0],'Apparecchio fisso':[40,100,65,0,0,0],'Allineatori Express/Light':[15,35,22,350,900,600],'Allineatori Comprehensive':[20,45,30,900,1800,1300],'Contenzione / retainer':[8,20,12,60,180,100]};
-function range(v,p=.12){return {min:+(v*(1-p)).toFixed(2),max:+(v*(1+p)).toFixed(2),suggested:+v.toFixed(2)}}
-async function aiMaterials(p,used,variant){const key=process.env.ANTHROPIC_API_KEY;if(!key||!used)return null;const prompt=`Prestazione odontoiatrica: ${p}. Variante: ${variant||'standard'}. Materiali/prodotti dichiarati dallo studio: ${used}. Stima in EUR il costo CONSUMATO per singola prestazione, non il prezzo dell'intera confezione. Se un prodotto non è identificabile, amplia il range. Rispondi solo JSON: {"min":numero,"max":numero,"suggested":numero}`;try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":key,"anthropic-version":"2023-06-01","content-type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:150,messages:[{role:"user",content:prompt}]})});if(!r.ok)return null;const d=await r.json();const t=d.content?.[0]?.text||'';const q=JSON.parse((t.match(/\{[\s\S]*\}/)||[])[0]||t);return {min:+q.min,max:+q.max,suggested:+q.suggested}}catch{return null}}
-exports.handler=async event=>{if(event.httpMethod!=='POST')return{statusCode:405,body:JSON.stringify({error:'Metodo non consentito'})};let x={};try{x=JSON.parse(event.body||'{}')}catch{return{statusCode:400,body:JSON.stringify({error:'Richiesta non valida'})}}const p=x.prestazione||'';let m={min:0,max:0,suggested:0},e={min:0,max:0,suggested:0},ms='Benchmark esterno',es='Non applicabile',note='Stima esterna iniziale: non è ancora un Benchmark EPA Dental validato.';
-if(EXT[p]){const a=EXT[p];m={min:a[0],max:a[1],suggested:a[2]};e={min:a[3],max:a[4],suggested:a[5]};if(a[5]>0)es='Benchmark esterno'}
-if(p==='Intarsio / Onlay'){m=x.variant==='chairside'?{min:35,max:75,suggested:50}:{min:15,max:35,suggested:24};e=x.variant==='chairside'?range(0,0):{min:130,max:240,suggested:180};es=x.variant==='chairside'?'Non applicabile':'Benchmark esterno';note=x.variant==='chairside'?'Chairside: materiali di produzione/cementazione; nessun laboratorio esterno.':'Workflow con laboratorio: consumabili chairside + stima esterna del costo odontotecnico.'}
-if(p==='Corona su dente'||p==='Corona su impianto'){const c=MASTERDENT[x.variant]||MASTERDENT.zr_pitt;m=p==='Corona su impianto'?{min:18,max:45,suggested:30}:{min:12,max:30,suggested:20};e=range(c,.08);es='Listino dello studio';note='Costo laboratorio da listino dello studio; materiali ancora su stima esterna.'}
-if(p==='Protesi totale'){m={min:25,max:60,suggested:40};e=range(MASTERDENT.total,.08);es='Listino dello studio'}if(p==='Protesi scheletrata'){m={min:20,max:50,suggested:35};e=range(MASTERDENT.scheletrata,.08);es='Listino dello studio'}if(p==='Provvisorio in resina'){m={min:8,max:20,suggested:12};e=range(MASTERDENT.provvisorio,.08);es='Listino dello studio'}if(p==='Ribasatura'){m={min:5,max:15,suggested:8};e=range(MASTERDENT.ribasatura,.08);es='Listino dello studio'}if(p==='Riparazione / aggiunta dente o gancio'){m={min:3,max:10,suggested:6};e=range(MASTERDENT.riparazione,.08);es='Listino dello studio'}
-if(p==='Chirurgia implantare guidata'){const n=x.variant||'1';m={min:35,max:90,suggested:55};const v=EURODENTAL.guide[n]+EURODENTAL.planning;e=range(v,.03);es='Listino dello studio';note='Dima + programmazione implantare da listino dello studio. Fixture e altri materiali implantari non inclusi.'}
-if(p==='Impianto singolo'){const f=Number(x.fixture)||0;m=f?range(f+45,.1):{min:120,max:260,suggested:180};e={min:0,max:0,suggested:0};ms=f?'Dato inserito dallo studio + benchmark esterno':'Benchmark esterno';note=f?'Fixture indicata dallo studio + stima esterna dei consumabili/componenti chirurgici.':'Fixture non indicata: stima esterna iniziale da validare.'}
-if(p==='All-on-implant provvisorio'){m={min:180,max:420,suggested:280};e={min:300,max:900,suggested:550};es='Benchmark esterno'}if(p==='All-on-implant definitivo'){m={min:200,max:500,suggested:320};e={min:900,max:2200,suggested:1500};es='Benchmark esterno'}
-if(x.materials_used){const ai=await aiMaterials(p,x.materials_used,x.variant);if(ai){m=ai;ms='Benchmark esterno · materiali indicati dallo studio';note='Stima del consumo per prestazione basata sui materiali indicati. Da validare con prezzi/listini reali quando disponibili.'}}
-if(x.real_external!==''&&x.real_external!=null){e=range(Number(x.real_external),0);es='Dato inserito dallo studio'}
-return{statusCode:200,headers:{'content-type':'application/json'},body:JSON.stringify({materials:m,external:e,materials_source:ms,external_source:es,note})}}
+// EPA Dental — motore stime: separa fonti reali, ricerca web e inferenza.
+const known={
+'OTT. M.O.D.':[[18,32,24],[0,0,0]],'OTT 2° CLASSE**':[[12,22,16],[0,0,0]],
+'ENDODONZIA MONORADICOLATO':[[18,35,25],[0,0,0]],'ENDODONZIA BIRADICOLARE':[[24,45,33],[0,0,0]],'ENDODONZIA PLURIRADICOLATO':[[30,60,42],[0,0,0]],
+'IGIENE':[[5,12,8],[0,0,0]],'SCALING E ROOT-PLANNING (SC-RP) QUADRANTE':[[8,18,12],[0,0,0]],
+'ESTRAZIONE (EX)':[[8,18,12],[0,0,0]],'ESTRAZIONE CHIRURGICA (EX CH)':[[18,45,30],[0,0,0]],
+'GRANDE RIALZO SENO MASCELLARE':[[150,350,230],[0,0,0]],
+'ALLINEATORI EXPRESS':[[15,35,22],[350,900,600]],'ALLINEATORI LIGHT':[[15,35,22],[350,900,600]],'ALLINEATORI COMPREHENSIVE':[[20,45,30],[900,1800,1300]],
+'PROTESI TOTALE':[[25,60,40],[326.6,383.4,355]],'PROTESI SCHELETRATA':[[20,50,35],[400.2,469.8,435]],
+'RIBASATURA':[[5,15,8],[101.2,118.8,110]],'RIPARAZIONE PROTESI':[[3,10,6],[30.36,35.64,33]],
+'CORONA MONOLITICA DENTE':[[12,30,20],[156.4,183.6,170]],'CORONA MONOLITICA IMPIANTO':[[18,45,30],[156.4,183.6,170]]
+};
+function range(a){return {min:a[0],max:a[1],suggested:a[2]}}
+function valid(o){if(!o||!['min','max','suggested'].every(k=>typeof o[k]==='number'&&Number.isFinite(o[k])&&o[k]>=0))return false;return o.min<=o.suggested&&o.suggested<=o.max}
+function parseJSON(s){const m=s.match(/\{[\s\S]*\}/);if(!m)return null;try{return JSON.parse(m[0])}catch{return null}}
+function respond(code,data){return {statusCode:code,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(data)}}
+async function privateArchive(input){
+ // Archivio riservato: solo endpoint privato configurato dal proprietario, MAI incluso nel repository pubblico.
+ const url=process.env.EPA_ARCHIVE_SEARCH_URL,token=process.env.EPA_ARCHIVE_TOKEN;
+ if(!url||!token||!url.startsWith('https://'))return {available:false,records:[]};
+ try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),7000);const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(input),signal:ctl.signal});clearTimeout(t);if(!r.ok)return {available:false,records:[]};const d=await r.json();return {available:true,records:Array.isArray(d.records)?d.records.slice(0,20):[]}}catch{return {available:false,records:[]}}
+}
+async function estimateAI(input,archive){
+ const key=process.env.ANTHROPIC_API_KEY;if(!key)return null;
+ const prompt=`Sei un analista di costi odontoiatrici italiani. Stima il costo VARIABILE per UNA prestazione, separando (A) materiali effettivamente consumati nello studio (non intera confezione) e (B) fattura laboratorio odontotecnico esterno. Non includere personale, tempo poltrona, costi fissi, IVA, prezzi al paziente. Se il laboratorio non è richiesto per la prestazione e l'utente non lo menziona, costo 0; altrimenti non supporre automaticamente 0. Usa preferibilmente i prezzi delle fatture fornite in archive, poi i listini, poi il web, e per ultimo stime prudenziali. Attenzione a CHF vs EUR, confezioni vs unità, prezzi lordi vs netti e anno. Non inventare fonti né citazioni. Per la ricerca web usa fonti di fornitori accessibili; se non hai cercato, dichiara web_used=false. Fornisci range ampi se mancano quantità. Se non è possibile stimare una categoria, usa null invece di zero. Rispondi SOLO con un oggetto JSON: {"materials":{"min":number,"max":number,"suggested":number}|null,"external":{"min":number,"max":number,"suggested":number}|null,"materials_source":string,"external_source":string,"web_used":boolean,"note":string}.\nINPUT: ${JSON.stringify(input)}\nARCHIVIO (solo righe disponibili): ${JSON.stringify(archive.records).slice(0,12500)}`;
+ const body={model:'claude-sonnet-4-6',max_tokens:1100,messages:[{role:'user',content:prompt}]};
+ // Anthropic web search: se il servizio non è abilitato, riprova senza web.
+ const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
+ try{return await invoke(true)||await invoke(false)}catch{try{return await invoke(false)}catch{return null}}
+}
+exports.handler=async event=>{
+ if(event.httpMethod!=='POST')return respond(405,{error:'Metodo non consentito'});
+ let x;try{x=JSON.parse(event.body||'{}')}catch{return respond(400,{error:'JSON non valido'})}
+ const p=String(x.prestazione||'').trim().slice(0,180);
+ if(!p)return respond(400,{error:'Seleziona una prestazione'});
+ const input={prestazione:p,materiali:String(x.materials_used||'').slice(0,2000),laboratorio:String(x.lab_used||'').slice(0,2000),variante:String(x.variant||'').slice(0,100)};
+ const archive=await privateArchive(input);
+ const ai=await estimateAI(input,archive);
+ if(ai&&(valid(ai.materials)||valid(ai.external))){
+   const materials=valid(ai.materials)?ai.materials:null,external=valid(ai.external)?ai.external:null;
+   if(!materials||!external)return respond(422,{error:'Non è stato possibile stimare entrambi i costi con sufficiente attendibilità. Aggiungi dettagli su materiali e laboratorio.'});
+   return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'consultato':'non collegato')+'.'});
+ }
+ // Fallback esplicito solo per prestazioni con benchmark preesistente: non inventare 0 su voci sconosciute.
+ if(known[p]){const [m,e]=known[p];return respond(200,{materials:range(m),external:range(e),materials_source:'Stima indicativa preesistente, da verificare',external_source:'Stima indicativa preesistente, da verificare',note:'AI/ricerca non disponibili: sono visualizzate stime preliminari, non prezzi verificati. Archivio privato '+(archive.available?'consultato':'non collegato')+'.'})}
+ return respond(503,{error:'Calcolo non disponibile per questa prestazione: il servizio AI non ha restituito una stima verificabile. Riprova o aggiungi dettagli.'});
+};
