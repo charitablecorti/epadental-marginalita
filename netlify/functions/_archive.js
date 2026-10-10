@@ -20,7 +20,7 @@ async function load(){
  const url='https://api.github.com/repos/'+repo+'/contents/'+PATH+'?ref=main';
  const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'},signal:ctl.signal});
  if(!r.ok)throw Error('GitHub '+r.status);
- const rows=csv(await r.text()).filter(x=>x.Decisione==='INCLUDERE' && x.Valuta==='EUR');
+ const rows=csv(await r.text()).filter(x=>x.Decisione==='INCLUDERE' && x.Valuta==='EUR' && Number(String(x['Prezzo unitario netto sconti (€)']||'').replace(',','.'))>0);
  cache={time:Date.now(),rows};return rows;
  }catch{return cache.rows}finally{clearTimeout(timer)}
 }
