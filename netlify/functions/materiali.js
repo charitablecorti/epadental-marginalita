@@ -27,7 +27,7 @@ async function estimateAI(input,archive){
  const body={model:'claude-sonnet-4-6',max_tokens:1800,messages:[{role:'user',content:prompt}]};
  // Anthropic web search: se il servizio non è abilitato, riprova senza web.
  const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),5500);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
- try{return await invoke(false)}catch{return null}
+ try{return await invoke(archive.records.length===0)}catch{return null}
 }
 exports.handler=async event=>{
  if(event.httpMethod!=='POST')return respond(405,{error:'Metodo non consentito'});
@@ -41,7 +41,7 @@ exports.handler=async event=>{
  const ai=await estimateAI(input,archive);
  if(ai&&(valid(ai.materials)||valid(ai.external))){
    const materials=valid(ai.materials)?ai.materials:null,external=valid(ai.external)?ai.external:null;
-   if(materials&&external)return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'consultato':'non collegato')+'.'});
+   if(materials&&external)return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'disponibile':'non collegato')+'.'});
    // Risposta AI parziale: usa il fallback invece di bloccare il calcolo.
  }
  // Continuità del calcolo: se AI non risponde, fornire stime orientative NON validate.
@@ -63,5 +63,5 @@ exports.handler=async event=>{
  // laboratorio resta un'ipotesi da confermare, non una certezza di delega.
  if(/visita|radiografia|cbct|scansion|impronta|igiene|sondaggio|cartella|estrazion|biopsi|apicectomia|gengivectomia|sbiancamento|scaling|levigatura|incappucciamento|pulpotomia|fixture|inserimento impianto|chirurgia implantare/i.test(text)&&!input.laboratorio.trim())v=[v[0],[0,0,0]];
  const m=range(v[0]),e=range(v[1]);
- return respond(200,{materials:m,external:e,materials_source:'Ipotesi generica per branca · affidabilità bassa',external_source:e.suggested===0?'Nessun laboratorio ipotizzato · da confermare':'Ipotesi generica per branca · affidabilità bassa',note:'ATTENZIONE: intervalli orientativi per categoria, non ricavati da fatture o ricerca web. AI non disponibile o risposta incompleta; archivio privato '+(archive.available?'consultato':'non collegato')+'. Non utilizzare come costo definitivo senza verifica. Compila i campi per migliorare la precisione.'});
+ return respond(200,{materials:m,external:e,materials_source:'Ipotesi generica per branca · affidabilità bassa',external_source:e.suggested===0?'Nessun laboratorio ipotizzato · da confermare':'Ipotesi generica per branca · affidabilità bassa',note:'Fonte: stima generale per branca; non è un prezzo documentato per la prestazione. Archivio privato '+(archive.available?'disponibile':'non collegato')+'.'});
 };
