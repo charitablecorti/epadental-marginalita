@@ -20,13 +20,13 @@ async function load(){
  const url='https://api.github.com/repos/'+repo+'/contents/'+PATH+'?ref=main';
  const r=await fetch(url,{headers:{Authorization:'Bearer '+token,Accept:'application/vnd.github.raw+json','X-GitHub-Api-Version':'2022-11-28'},signal:ctl.signal});
  if(!r.ok)throw Error('GitHub '+r.status);
- const rows=csv(await r.text()).filter(x=>x.Decisione==='INCLUDERE');
+ const rows=csv(await r.text()).filter(x=>x.Decisione==='INCLUDERE' && x.Valuta==='EUR');
  cache={time:Date.now(),rows};return rows;
  }catch{return cache.rows}finally{clearTimeout(timer)}
 }
 function matches(rows,query,max=10){
- const stop=new Set(['della','delle','degli','dente','denti','singolo','multiplo','impianto','materiali','laboratorio']);
- const terms=String(query).toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(x=>x.length>3&&!stop.has(x));
+ const stop=new Set(['della','delle','degli','dente','denti','singolo','multiplo','materiali','laboratorio','utilizzati','costi','esterni']);
+ const terms=[...new Set(String(query).toLowerCase().split(/[^a-zà-ÿ0-9]+/).filter(x=>x.length>3&&!stop.has(x)))];
  return rows.map(r=>{const s=(r['Descrizione originale']||'').toLowerCase();const score=terms.filter(t=>s.includes(t)).length;return {r,score}})
  .filter(x=>x.score>0).sort((a,b)=>b.score-a.score).slice(0,max).map(({r})=>({
  descrizione:r['Descrizione originale'],categoria:r.Categoria,fornitore:r.Fornitore,
