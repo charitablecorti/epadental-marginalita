@@ -1,3 +1,4 @@
+const documentedArchive=require('./_archive');
 // EPA Dental — motore stime: separa fonti reali, ricerca web e inferenza.
 const known={
 'OTT. M.O.D.':[[18,32,24],[0,0,0]],'OTT 2° CLASSE**':[[12,22,16],[0,0,0]],
@@ -25,8 +26,8 @@ async function estimateAI(input,archive){
  const prompt=`Sei un analista di costi odontoiatrici italiani. Stima il costo VARIABILE per UNA prestazione, separando (A) materiali effettivamente consumati nello studio (non intera confezione) e (B) fattura laboratorio odontotecnico esterno. Non includere personale, tempo poltrona, costi fissi, IVA, prezzi al paziente. Se il laboratorio non è richiesto per la prestazione e l'utente non lo menziona, costo 0; altrimenti non supporre automaticamente 0. Usa preferibilmente i prezzi delle fatture fornite in archive, poi i listini, poi il web, e per ultimo stime prudenziali. Attenzione a CHF vs EUR, confezioni vs unità, prezzi lordi vs netti e anno. Non inventare fonti né citazioni. Per la ricerca web usa fonti di fornitori accessibili; se non hai cercato, dichiara web_used=false. Fornisci range ampi se mancano quantità. Se non è possibile stimare una categoria, usa null invece di zero. Rispondi SOLO con un oggetto JSON: {"materials":{"min":number,"max":number,"suggested":number}|null,"external":{"min":number,"max":number,"suggested":number}|null,"materials_source":string,"external_source":string,"web_used":boolean,"note":string}.\nINPUT: ${JSON.stringify(input)}\nARCHIVIO (solo righe disponibili): ${JSON.stringify(archive.records).slice(0,12500)}`;
  const body={model:'claude-sonnet-4-6',max_tokens:1800,messages:[{role:'user',content:prompt}]};
  // Anthropic web search: se il servizio non è abilitato, riprova senza web.
- const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
- try{return await invoke(true)||await invoke(false)}catch{try{return await invoke(false)}catch{return null}}
+ const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),5500);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
+ try{return await invoke(false)}catch{return null}
 }
 exports.handler=async event=>{
  if(event.httpMethod!=='POST')return respond(405,{error:'Metodo non consentito'});
@@ -34,7 +35,9 @@ exports.handler=async event=>{
  const p=String(x.prestazione||'').trim().slice(0,180);
  if(!p)return respond(400,{error:'Seleziona una prestazione'});
  const input={prestazione:p,materiali:String(x.materials_used||'').slice(0,2000),laboratorio:String(x.lab_used||'').slice(0,2000),variante:String(x.variant||'').slice(0,100)};
- const archive=await privateArchive(input);
+ const rows=await documentedArchive.load();
+ const records=documentedArchive.matches(rows,[p,input.materiali,input.laboratorio].filter(Boolean).join(' '),12);
+ const archive={available:rows.length>0,records};
  const ai=await estimateAI(input,archive);
  if(ai&&(valid(ai.materials)||valid(ai.external))){
    const materials=valid(ai.materials)?ai.materials:null,external=valid(ai.external)?ai.external:null;
