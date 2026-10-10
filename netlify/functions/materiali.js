@@ -1,3 +1,4 @@
+const documentedArchive=require('./_archive');
 // EPA Dental — motore stime: separa fonti reali, ricerca web e inferenza.
 const known={
 'OTT. M.O.D.':[[18,32,24],[0,0,0]],'OTT 2° CLASSE**':[[12,22,16],[0,0,0]],
@@ -14,19 +15,13 @@ function range(a){return {min:a[0],max:a[1],suggested:a[2]}}
 function valid(o){if(!o||!['min','max','suggested'].every(k=>typeof o[k]==='number'&&Number.isFinite(o[k])&&o[k]>=0))return false;return o.min<=o.suggested&&o.suggested<=o.max}
 function parseJSON(s){const m=s.match(/\{[\s\S]*\}/);if(!m)return null;try{return JSON.parse(m[0])}catch{return null}}
 function respond(code,data){return {statusCode:code,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'},body:JSON.stringify(data)}}
-async function privateArchive(input){
- // Archivio riservato: solo endpoint privato configurato dal proprietario, MAI incluso nel repository pubblico.
- const url=process.env.EPA_ARCHIVE_SEARCH_URL,token=process.env.EPA_ARCHIVE_TOKEN;
- if(!url||!token||!url.startsWith('https://'))return {available:false,records:[]};
- try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),7000);const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(input),signal:ctl.signal});clearTimeout(t);if(!r.ok)return {available:false,records:[]};const d=await r.json();return {available:true,records:Array.isArray(d.records)?d.records.slice(0,20):[]}}catch{return {available:false,records:[]}}
-}
 async function estimateAI(input,archive){
  const key=process.env.ANTHROPIC_API_KEY;if(!key)return null;
  const prompt=`Sei un analista di costi odontoiatrici italiani. Stima il costo VARIABILE per UNA prestazione, separando (A) materiali effettivamente consumati nello studio (non intera confezione) e (B) fattura laboratorio odontotecnico esterno. Non includere personale, tempo poltrona, costi fissi, IVA, prezzi al paziente. Se il laboratorio non è richiesto per la prestazione e l'utente non lo menziona, costo 0; altrimenti non supporre automaticamente 0. Usa preferibilmente i prezzi delle fatture fornite in archive, poi i listini, poi il web, e per ultimo stime prudenziali. Attenzione a CHF vs EUR, confezioni vs unità, prezzi lordi vs netti e anno. Non inventare fonti né citazioni. Per la ricerca web usa fonti di fornitori accessibili; se non hai cercato, dichiara web_used=false. Fornisci range ampi se mancano quantità. Se non è possibile stimare una categoria, usa null invece di zero. Rispondi SOLO con un oggetto JSON: {"materials":{"min":number,"max":number,"suggested":number}|null,"external":{"min":number,"max":number,"suggested":number}|null,"materials_source":string,"external_source":string,"web_used":boolean,"note":string}.\nINPUT: ${JSON.stringify(input)}\nARCHIVIO (solo righe disponibili): ${JSON.stringify(archive.records).slice(0,12500)}`;
  const body={model:'claude-sonnet-4-6',max_tokens:1800,messages:[{role:'user',content:prompt}]};
  // Anthropic web search: se il servizio non è abilitato, riprova senza web.
- const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
- try{return await invoke(true)||await invoke(false)}catch{try{return await invoke(false)}catch{return null}}
+ const invoke=async web=>{const b={...body};if(web)b.tools=[{type:'web_search_20250305',name:'web_search',max_uses:3}];const c=new AbortController(),t=setTimeout(()=>c.abort(),6500);try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify(b),signal:c.signal});if(!r.ok)return null;const d=await r.json();const text=(d.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n');const o=parseJSON(text);if(!o)return null;const webUsed=(d.content||[]).some(x=>x.type==='server_tool_use'&&x.name==='web_search');o.web_used=webUsed;return o}finally{clearTimeout(t)}};
+ try{return await invoke(archive.records.length===0)}catch{return null}
 }
 exports.handler=async event=>{
  if(event.httpMethod!=='POST')return respond(405,{error:'Metodo non consentito'});
@@ -34,16 +29,20 @@ exports.handler=async event=>{
  const p=String(x.prestazione||'').trim().slice(0,180);
  if(!p)return respond(400,{error:'Seleziona una prestazione'});
  const input={prestazione:p,materiali:String(x.materials_used||'').slice(0,2000),laboratorio:String(x.lab_used||'').slice(0,2000),variante:String(x.variant||'').slice(0,100)};
- const archive=await privateArchive(input);
+ const rows=await documentedArchive.load();
+ const records=documentedArchive.matches(rows,[p,input.materiali,input.laboratorio].filter(Boolean).join(' '),12);
+ const archive={available:rows.length>0,records};
+ // Prezzo per confezione NON è un costo per trattamento: usare i prezzi documentati
+ // solo come contesto AI, salvo costi per prestazione esplicitamente verificati.
  const ai=await estimateAI(input,archive);
  if(ai&&(valid(ai.materials)||valid(ai.external))){
    const materials=valid(ai.materials)?ai.materials:null,external=valid(ai.external)?ai.external:null;
-   if(materials&&external)return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'consultato':'non collegato')+'.'});
+   if(materials&&external)return respond(200,{materials,external,materials_source:String(ai.materials_source||'Stima AI').slice(0,180),external_source:String(ai.external_source||'Stima AI').slice(0,180),note:String(ai.note||'').slice(0,900)+' | Ricerca web: '+(ai.web_used?'effettuata':'non disponibile')+'. Archivio privato: '+(archive.available?'disponibile':'non collegato')+'.'});
    // Risposta AI parziale: usa il fallback invece di bloccare il calcolo.
  }
  // Continuità del calcolo: se AI non risponde, fornire stime orientative NON validate.
  // I range sono ipotesi per categoria, NON prezzi di fatture o benchmark di mercato.
- if(known[p]){const [m,e]=known[p];return respond(200,{materials:range(m),external:range(e),materials_source:'Stima preliminare, non verificata',external_source:e[2]===0?'Laboratorio non previsto nel caso standard (da confermare)':'Stima preliminare, non verificata',note:'Calcolo orientativo da dati preesistenti. AI e ricerca web non disponibili; archivio privato '+(archive.available?'consultato':'non collegato')+'. Aggiungi dettagli per affinare il risultato.'})}
+ if(known[p]){const [m,e]=known[p];return respond(200,{materials:range(m),external:range(e),materials_source:'Stima preliminare, non verificata',external_source:e[2]===0?'Laboratorio non previsto nel caso standard (da confermare)':'Stima preliminare, non verificata',note:'Fonte: valori guida preesistenti; costo per prestazione non validato con fatture.'})}
  const area=String(x.area||'').toUpperCase();
  const text=p.toLocaleLowerCase('it');
  // Valori guida volutamente ampi; usati solo in assenza di dati affidabili.
@@ -60,5 +59,5 @@ exports.handler=async event=>{
  // laboratorio resta un'ipotesi da confermare, non una certezza di delega.
  if(/visita|radiografia|cbct|scansion|impronta|igiene|sondaggio|cartella|estrazion|biopsi|apicectomia|gengivectomia|sbiancamento|scaling|levigatura|incappucciamento|pulpotomia|fixture|inserimento impianto|chirurgia implantare/i.test(text)&&!input.laboratorio.trim())v=[v[0],[0,0,0]];
  const m=range(v[0]),e=range(v[1]);
- return respond(200,{materials:m,external:e,materials_source:'Ipotesi generica per branca · affidabilità bassa',external_source:e.suggested===0?'Nessun laboratorio ipotizzato · da confermare':'Ipotesi generica per branca · affidabilità bassa',note:'ATTENZIONE: intervalli orientativi per categoria, non ricavati da fatture o ricerca web. AI non disponibile o risposta incompleta; archivio privato '+(archive.available?'consultato':'non collegato')+'. Non utilizzare come costo definitivo senza verifica. Compila i campi per migliorare la precisione.'});
+ return respond(200,{materials:m,external:e,materials_source:'Ipotesi generica per branca · affidabilità bassa',external_source:e.suggested===0?'Nessun laboratorio ipotizzato · da confermare':'Ipotesi generica per branca · affidabilità bassa',note:'Fonte: stima generale per branca; non è un prezzo documentato per la prestazione. Archivio privato '+(archive.available?'disponibile':'non collegato')+'.'});
 };
